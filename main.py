@@ -18,10 +18,12 @@ from PySide6.QtWidgets import QApplication
 
 from UI.ui import MainWindow
 from modules.processes_watcher import ProcessWatcher
+from modules.logger_config import setup_logging
 
 import sys
 
 if __name__ == "__main__":
+    setup_logging()
     app = QApplication(sys.argv)
     window = MainWindow()
     process_watcher = ProcessWatcher(main_window=window)

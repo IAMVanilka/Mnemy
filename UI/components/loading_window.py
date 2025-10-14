@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 
 
-class LoadingDialog(QDialog):
+class LoadingWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.animation_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]

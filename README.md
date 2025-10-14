@@ -15,14 +15,19 @@
 - **Автоматическая синхронизация** после каждой игровой сессии
 - **Ручная синхронизация** в один клик
 - Просмотр истории бэкапов и **восстановление любого сохранения**
+- Поддержка нескольких пользователей
 
 ## 📥 Установка
 
 1. Клонируйте данный репозиторий: `git clone https://github.com/IAMVanilka/Mnemy.git`
 2. Создайте виртуальное окружение python: `python -m venv venv`
-3. Запустите виртуальное окружение: `source venv/bin/activate` (bash) | `source venv/scripts/activate` (power shell) | `call venv/scripts/activate` (cmd)
+3. Запустите виртуальное окружение: `source venv/bin/activate` (bash) | `venv/Scripts/activate` (power shell) | `call venv/scripts/activate` (cmd)
 4. Установите зависимости: `pip install -r requirements.txt`
 5. Запустите приложение: `python main.py`
+
+**Или вы можете перейти в [releases](https://github.com/IAMVanilka/Mnemy/releases) и скачать там exe файл.**
+
+> ⚠️ Приложение тестировалось на **Python3.13**
 
 P.S Если вы на Linux можете просто запустить `start_mnemy.sh`
 
@@ -67,6 +72,7 @@ P.S Если вы на Linux можете просто запустить `start
  - Automatic sync after every gaming session
  - Manual sync with one click
  - View backup history and restore any save
+ - Multi-user support
  
 
 ## 📥 Installation
@@ -76,12 +82,15 @@ Create a Python virtual environment: `python -m venv venv`
 
 Activate the virtual environment: 
  - Linux/macOS (bash/zsh): `source venv/bin/activate`
- - Windows (PowerShell): `source venv/scripts/activate`
+ - Windows (PowerShell): `venv/Scripts/activate`
  - Windows (CMD): `call venv/scripts/activate`
  
 Install dependencies: `pip install -r requirements.txt`
 
 Launch the app: `python main.py`
+
+**Or you can go to [releases](https://github.com/IAMVanilka/Mnemy/releases) and download exe there.**
+> ⚠️ The application was tested on **Python3.13**
 
 P.S. On Linux, you can simply run `./start_mnemy.sh`. 
 

@@ -1,5 +1,6 @@
 # Copyright (C) 2025 IAMVanilka
 # SPDX-License-Identifier: GPL-3.0-or-later
+import logging
 
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QIcon, QAction
@@ -9,10 +10,12 @@ from UI.components.side_menu import SideMenu
 from UI.components.settings_window import SettingsWindow
 from UI.components.games_dashboard import GamesDashboard
 from UI.components.games_dashboard import AsyncRunner
-from UI.components.loading_window import LoadingDialog
+from UI.components.loading_window import LoadingWindow
 
 from modules.ui_controllers.main_controller import set_up_games_data
 from modules.API_client import APIClient
+
+logger = logging.getLogger(__name__)
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -20,9 +23,10 @@ class MainWindow(QWidget):
         self.api_client = APIClient()
         self.settings = QSettings("Mnemy")
         self.tray_icon = None
+        self.setWindowIcon(QIcon('UI/resources/icon.ico'))
         self.main_layout = None
         self.stacked_widget = None
-        self.loading_dialog = LoadingDialog()
+        self.loading_dialog = LoadingWindow()
         self.setup_tray_icon()
         self.get_games_data()
 
@@ -31,7 +35,7 @@ class MainWindow(QWidget):
         import os
 
         if not QSystemTrayIcon.isSystemTrayAvailable():
-            print("Системный трей недоступен")
+            logger.error("Системный трей недоступен")
             return
 
         self.tray_icon = QSystemTrayIcon(self)
@@ -92,7 +96,7 @@ class MainWindow(QWidget):
         self.show_loading_dialog()
 
         get_games_runner = AsyncRunner()
-        get_games_runner.finished.connect(self.on_data_loaded)
+        get_games_runner.result.connect(self.on_data_loaded)
         get_games_runner.error.connect(self.on_data_error)
 
         get_games_runner.run_async(set_up_games_data, self.api_client)
@@ -121,7 +125,7 @@ class MainWindow(QWidget):
     def on_data_error(self, error_info):
         """Ошибка при загрузке данных"""
         self.hide_loading_dialog()
-        print(f"Ошибка загрузки: {error_info['exception']}")
+        logger.error(f"Ошибка загрузки данных об играх с сервера: {error_info['exception']}")
         self.initializeUI()
 
     def initializeUI(self):

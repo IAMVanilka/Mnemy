@@ -374,7 +374,7 @@ class SettingsWindow(QWidget):
             self.update_status(f"🔄 Восстановление бэкапа {backup_name['filename']} для {game_name}")
 
         def restoring_is_done(status):
-            if status is True:
+            if status == 200:
                 self.update_status(f"✅ Бэкап {backup_name['filename']} для {game_name} успешно востановлен!")
             else:
                 self.update_status("❌ Не удалось восстановить бэкап!")
@@ -400,11 +400,13 @@ class SettingsWindow(QWidget):
         """Удаление выбранного бэкапа"""
 
         def backup_deleted(status):
-            if status is True:
+            if status == 200:
                 self.update_status(f"🗑️ Бэкап {backup_name['filename']} для {game_name} был успешно удалён!")
-            elif status is None:
+            elif status == 204:
                 self.update_status(
                     f"❌ Невозможно удалить бэкап {backup_name['filename']} для {game_name}! Файл отсутствует на сервере!")
+            else:
+                self.update_status(f"❌ Ошибка удаления бэкапа {backup_name['filename']} для {game_name}! Код ответа от сервера: {status}")
             self.load_data()
 
         def backup_delete_error(error):

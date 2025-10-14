@@ -5,7 +5,11 @@ import os
 import shutil
 import tarfile
 import hashlib
+import logging
 import threading
+
+logger = logging.getLogger(__name__)
+logger.propagate = False
 
 async def hash_generator(base_dir) -> dict:
     """Сканирует папку и генерирует словарь {'file_path': 'md5_hash'}"""
@@ -45,28 +49,13 @@ async def create_archive_chunk_generator(base_dir: str, files_paths: list, CHUNK
                         if os.path.exists(file):
                             relative_path = file.split(base_dir)[1]
                             tar.add(file, arcname=relative_path)
-                            print(f"Обрабатываю файл {file}")
-
-                    # def process_directory(dir_path):
-                    #     with os.scandir(dir_path) as entries:
-                    #         for entry in entries:
-                    #             try:
-                    #                 if entry.is_file(follow_symlinks=False):
-                    #                     relative_path = Path(entry.path).relative_to(folder_path)
-                    #                     tar.add(entry.path, arcname=str(relative_path))
-                    #                 elif entry.is_dir(follow_symlinks=False):
-                    #                     process_directory(entry.path)
-                    #             except (OSError, PermissionError) as e:
-                    #                 print(f"⚠️  Пропущен элемент {entry.path}: {e}")
-                    #                 continue
-
-                    #process_directory(current_folder)
+                            logger.debug(f"Обрабатываю файл {file}")
 
         except BrokenPipeError:
-            print("ℹ️  Pipe closed by reader (normal behavior)")
+            logger.debug("ℹ️  Pipe closed by reader (normal behavior)")
             pass
         except Exception as e:
-            print(f"❌ Writer error: {e}")
+            logger.error(f"❌ Writer error: {e}", exc_info=True)
             exception_occurred.set()
 
     thread = threading.Thread(target=writer, daemon=True)
@@ -81,22 +70,26 @@ async def create_archive_chunk_generator(base_dir: str, files_paths: list, CHUNK
 
 
 async def get_archive_chunks(file, path_to_saves: str):
-    file.raise_for_status()
+    try:
+        file.raise_for_status()
 
-    if not os.path.exists("temp_data"):
-        os.mkdir("temp_data")
+        if not os.path.exists("temp_data"):
+            os.mkdir("temp_data")
 
-    with open("temp_data/downloaded_saves.tar.gz", "wb") as f:
-        for chunk in file.iter_content(chunk_size=64 * 1024):
-            f.write(chunk)
+        with open("temp_data/downloaded_saves.tar.gz", "wb") as f:
+            for chunk in file.iter_content(chunk_size=64 * 1024):
+                f.write(chunk)
 
-    with tarfile.open("temp_data/downloaded_saves.tar.gz", "r:gz") as tar:
-        if not os.path.exists(path_to_saves):
-            os.mkdir(path_to_saves)
-        else:
-            shutil.rmtree(path_to_saves)
-            os.mkdir(path_to_saves)
+        with tarfile.open("temp_data/downloaded_saves.tar.gz", "r:gz") as tar:
+            if not os.path.exists(path_to_saves):
+                os.mkdir(path_to_saves)
+            else:
+                shutil.rmtree(path_to_saves)
+                os.mkdir(path_to_saves)
 
-        tar.extractall(path=path_to_saves)
+            tar.extractall(path=path_to_saves)
 
-    os.remove('temp_data/downloaded_saves.tar.gz')
+        os.remove('temp_data/downloaded_saves.tar.gz')
+
+    except Exception as e:
+        logger.error(e, exc_info=True)

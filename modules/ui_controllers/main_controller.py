@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import datetime
+import logging
 import os
 import shutil
 
 from modules.sqls import update_sync_time, add_new_game, get_all_games, get_game_by_name
 from modules.API_client import APIClient
+
+logger = logging.getLogger(__name__)
 
 def get_utc_time(date: datetime):
     import time
@@ -14,7 +17,7 @@ def get_utc_time(date: datetime):
     import pytz
 
     local_offset = time.timezone if time.daylight == 0 else time.altzone
-    local_tz = pytz.FixedOffset(-local_offset // 60)  # в минутах
+    local_tz = pytz.FixedOffset(-local_offset // 60)
 
     last_sync_aware = local_tz.localize(date)
     last_sync_utc = last_sync_aware.astimezone(datetime.timezone.utc)
@@ -22,23 +25,26 @@ def get_utc_time(date: datetime):
 
 async def sync_saves_action(game_name: str, saves_path: str, game_id: int, api_client: APIClient):
     last_sync_date = get_game_by_name(game_name)["last_sync_date"]
-    utc_date = get_utc_time(last_sync_date)
+
+    if last_sync_date is not None:
+        utc_date = get_utc_time(last_sync_date)
+    else:
+        utc_date = get_utc_time(datetime.datetime.now())
 
     files_data = await api_client.check_files(game_name=game_name, base_dir=saves_path, date=utc_date)
-    if files_data != "redirect":
-        print("Данные клиента устарели. Обновляю...")
+    if files_data != 307:
         upload_status = await api_client.upload_files_streaming(saves_path, files_data, game_name)
         update_sync_time(game_id=game_id, date=datetime.datetime.now())
         return upload_status
     else:
+        logger.info("Данные клиента устарели. Обновляю...")
         return await download_saves_action(game_name, saves_path, game_id, api_client)
 
 async def download_saves_action(game_name: str, saves_path: str, game_id: int, api_client: APIClient):
-    shutil.rmtree(saves_path)
-    os.mkdir(saves_path)
-    status = await api_client.download_files(game_name, saves_path)
-    update_sync_time(game_id=game_id, date=datetime.datetime.now())
-    return status
+    status = await api_client.download_files(game_name, saves_path, delete_saves_folder=True)
+    if status:
+        update_sync_time(game_id=game_id, date=datetime.datetime.now())
+        return status
 
 async def delete_from_server_action(game_name: str, delete_backups: bool, api_client: APIClient):
     return await api_client.delete_game(game_name, delete_backups=True if delete_backups else False)
@@ -54,7 +60,9 @@ async def set_up_games_data(api_client: APIClient):
 
     new_games_list = [game_name for game_name in games_list if game_name not in local_game_names]
     for game in new_games_list:
-        add_new_game(game_name=game['game_name'], image_path=f"UI/resources/{game['game_name']}.jpg")
+        add_status = add_new_game(game_name=game)
+        if not add_status:
+            return add_status
 
     await load_games_covers(api_client)
 

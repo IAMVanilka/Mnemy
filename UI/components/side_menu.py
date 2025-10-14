@@ -4,6 +4,8 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 
+from _version import __version__
+
 class SettingsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -36,7 +38,7 @@ class SideMenu(QWidget):
         self.create_side_menu()
 
     def create_side_menu(self):
-        logo_label = QLabel("Mnemy\nver. 0.0.1")
+        logo_label = QLabel(f"Mnemy\nver {__version__}")
         logo_label.setStyleSheet("""
                             color: white;
                             font-size: 16px;

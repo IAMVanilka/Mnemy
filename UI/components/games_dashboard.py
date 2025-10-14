@@ -1,12 +1,15 @@
 # Copyright (C) 2025 IAMVanilka
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import logging
 import os.path
+import sys
 
 from PySide6.QtCore import QRect, QSize, Qt, QPoint, Signal
 from PySide6.QtGui import QPixmap, QAction, QIcon
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QScrollArea, QLayout, QLabel, QFrame, QMenu, QDialog, QCheckBox, \
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QScrollArea, QLayout, QLabel, QFrame, QMenu, QDialog, \
     QFormLayout, QLineEdit, QFileDialog, QHBoxLayout, QMessageBox
+from pyexpat.errors import messages
 
 from modules.sqls import get_all_games, add_new_game, delete_game, update_game
 from modules.ui_controllers.async_runner import AsyncRunner
@@ -14,187 +17,9 @@ from modules.API_client import APIClient
 from modules.ui_controllers.main_controller import (sync_saves_action, delete_from_server_action, load_games_covers,
                                                     update_game_data_on_server_action, download_saves_action)
 
+from UI.components.dynamic_button_dialog import DynamicButtonDialog
 
-class DynamicButtonDialog(QDialog):
-    def __init__(self, title, message, parent=None,
-                 buttons=None,
-                 checkbox_text=None,
-                 default_button=0):
-        """
-        buttons: список кортежей [(текст, стиль), ...]
-        стиль: "primary", "secondary", "danger", "success" или пользовательский CSS
-        """
-        super().__init__(parent)
-        self.checkbox_checked = False
-        self.user_choice = None
-        self.title = title
-        self.message = message
-        self.buttons_config = buttons or [("OK", "primary")]
-        self.checkbox_text = checkbox_text
-        self.default_button = default_button
-        self.button_objects = []  # Список созданных кнопок
-        self.setup_ui()
-
-    def setup_ui(self):
-        self.setWindowTitle(self.title)
-        self.setModal(True)
-        self.setStyleSheet("background-color: #29292A;")
-
-        height = 150 + (30 if self.checkbox_text else 0) + (len(self.buttons_config) * 25)
-        self.setFixedSize(450, min(height, 400))
-
-        layout = QVBoxLayout()
-
-        # Сообщение
-        message_label = QLabel(self.message)
-        message_label.setWordWrap(True)
-        message_label.setStyleSheet("""
-            color: white; 
-            font-size: 14px;
-            margin-bottom: 10px;
-        """)
-        message_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-
-        # Чекбокс (опционально)
-        self.checkbox = None
-        if self.checkbox_text:
-            self.checkbox = QCheckBox(self.checkbox_text)
-            self.checkbox.setStyleSheet("""
-                QCheckBox {
-                    color: white;
-                    font-size: 13px;
-                    margin: 10px 0;
-                }
-                QCheckBox::indicator {
-                    width: 18px;
-                    height: 18px;
-                }
-            """)
-
-        # Кнопки
-        buttons_layout = QVBoxLayout()
-        buttons_layout.setSpacing(8)
-
-        self.button_objects = []
-
-        for i, (text, style) in enumerate(self.buttons_config):
-            button = QPushButton(text)
-            button.setStyleSheet(self.get_button_style(style))
-            button.setFixedHeight(35)
-
-            button.clicked.connect(lambda checked, idx=i: self.button_clicked(idx))
-
-            buttons_layout.addWidget(button)
-            self.button_objects.append(button)
-
-            # Устанавливаем кнопку по умолчанию
-            if i == self.default_button:
-                button.setDefault(True)
-
-        # Добавляем элементы в layout
-        layout.addWidget(message_label)
-        if self.checkbox:
-            layout.addWidget(self.checkbox)
-
-        # Добавляем разделитель
-        if self.buttons_config:
-            separator = QFrame()
-            separator.setFrameShape(QFrame.HLine)
-            separator.setStyleSheet("color: #555555;")
-            layout.addWidget(separator)
-
-        layout.addLayout(buttons_layout)
-
-        self.setLayout(layout)
-
-        # Подключаем чекбокс (если есть)
-        if self.checkbox:
-            self.checkbox.stateChanged.connect(self.on_checkbox_changed)
-
-    def get_button_style(self, style):
-        """Получить стиль для кнопки"""
-        styles = {
-            "primary": """
-                QPushButton {
-                    background-color: #2196F3;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    font-size: 14px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #1976D2;
-                }
-                QPushButton:pressed {
-                    background-color: #0D47A1;
-                }
-            """,
-            "secondary": """
-                QPushButton {
-                    background-color: #666666;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    font-size: 14px;
-                }
-                QPushButton:hover {
-                    background-color: #777777;
-                }
-                QPushButton:pressed {
-                    background-color: #555555;
-                }
-            """,
-            "danger": """
-                QPushButton {
-                    background-color: #d32f2f;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    font-size: 14px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #f44336;
-                }
-                QPushButton:pressed {
-                    background-color: #c62828;
-                }
-            """,
-            "success": """
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    font-size: 14px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
-                QPushButton:pressed {
-                    background-color: #388E3C;
-                }
-            """
-        }
-
-        if style in styles:
-            return styles[style]
-        else:
-            return style  # Пользовательский CSS
-
-    def button_clicked(self, button_index):
-        self.user_choice = button_index
-        self.done(button_index)
-        self.accept()
-
-    def on_checkbox_changed(self, state):
-        self.checkbox_checked = bool(state)
-
-    def get_result(self):
-        """Получить результат: (user_choice, checkbox_state)"""
-        return self.user_choice, self.checkbox_checked
+logger=logging.getLogger(__name__)
 
 class ClickableFrame(QFrame):
     """Класс, который создает кликабельную карточку игры с изображением и контекстным меню.
@@ -221,7 +46,7 @@ class ClickableFrame(QFrame):
         if error is not True:
             msg = QMessageBox()
             msg.setWindowTitle("Ошибка")
-            msg.setText("Не удалось удалить игру на сервере! Сервер ответил False!" if error is False else
+            msg.setText("Не удалось удалить игру на сервере!" if error is False else
                         f"Не удалось удалить игру на сервере! Текст ошибки: {error}")
             msg.setIcon(QMessageBox.Critical)
             msg.setModal(True)
@@ -253,7 +78,36 @@ class ClickableFrame(QFrame):
             """)
         self.sync_label.setFixedSize(190, 20)
 
-        print(error)
+        logger.error(f"Sync error: {error}", exc_info=True)
+
+    def on_sync_result(self, status):
+        if status == 404:
+            sync_msg = DynamicButtonDialog(
+                title="Невозможно синхронизировать сохранения!",
+                message="Сохранений для данной игры нет на сервере!",
+            )
+            sync_msg.setFixedSize(330, 120)
+            sync_msg.show()
+            self.on_sync_error("Saves doesn't exist on server!")
+        elif status == 200:
+            self.game_update_signal.emit()
+        elif status is None:
+            from pathlib import Path
+            sync_msg = DynamicButtonDialog(
+                title="Невозможно синхронизировать сохранения!",
+                message=f"Неизвестная ошибка! Проверьте логи по пути: {Path(sys.argv[0]).parent.joinpath("logs")}",
+            )
+            sync_msg.setFixedSize(330, 80)
+            sync_msg.show()
+            self.on_sync_error("Sync failed need to check logs!")
+        else:
+            sync_msg = DynamicButtonDialog(
+                title="Невозможно синхронизировать сохранения!",
+                message=f"Неизвестная ошибка! Код ответа от сервера: {status}. Проверьте логи!",
+            )
+            sync_msg.setFixedSize(330, 80)
+            sync_msg.show()
+            self.on_sync_error("Sync failed need to check logs!")
 
     def setup_card_ui(self):
         """Создание интерфейса карточки игры"""
@@ -291,7 +145,7 @@ class ClickableFrame(QFrame):
 
         # Загружаем и масштабируем изображение
         image_path = self.kwargs.get('image_path', '')
-        if image_path == "" or not os.path.exists(image_path):
+        if image_path == "" or image_path is None or not os.path.exists(image_path):
             if os.path.exists(f"UI/resources/{self.kwargs.get("game_name")}.jpg"):
                 pixmap = QPixmap(f"UI/resources/{self.kwargs.get("game_name")}.jpg")
             else:
@@ -493,10 +347,24 @@ class ClickableFrame(QFrame):
                     opened = True
                     break
                 except Exception:
+                    error_dialog = DynamicButtonDialog(
+                        title='Ошибка открытия папки!',
+                        message="Не удалось открыть папку с сохранениям по неизвестной причине!",
+                    )
+                    error_dialog.setFixedSize(250, 140)
+                    error_dialog.show()
+                    logger.error("Can't open saves folder!")
                     continue
 
             if not opened:
-                raise FileNotFoundError("Не удалось открыть папку: не найден подходящий файловый менеджер")
+                error_dialog = DynamicButtonDialog(
+                    title='Ошибка открытия папки!',
+                    message="Не удалось открыть папку с сохранениям! Файловый менеджер не найден!",
+                )
+                error_dialog.setFixedSize(250, 140)
+                error_dialog.show()
+                logger.error("Can't find file manager!")
+                raise FileNotFoundError("Folder isn't open: can't find file manager!")
 
     def on_edit(self):
         print("Выбрано: Редактировать")
@@ -531,31 +399,24 @@ class ClickableFrame(QFrame):
                 try:
                     if user_choose == 0:
                         delete_game(game_id=game_id)
+                        os.remove(f"UI/resources/{game_name}.jpg")
                         self.game_deleted_signal.emit(game_id)
-                        print(f"Игра {game_name} удалена")
+                        logger.info(f"Game {game_name} deleted.")
 
                         if delete_from_server:
                             self.delete_runner = AsyncRunner()
-                            self.delete_runner.finished.connect(lambda x: print(f"ERROR signal received: {x}") or self.on_delete_error(x))
-                            self.delete_runner.error.connect(lambda x: print(f"ERROR signal received: {x}") or self.on_delete_error(x))
+                            self.delete_runner.finished.connect(self.on_delete_error)
+                            self.delete_runner.error.connect(self.on_delete_error)
                             self.delete_runner.run_async(delete_from_server_action, game_name, True, self.api_client)
 
                 except Exception as e:
-                    print(f"Exception: {e}")  # <-- Отладка
-                    QMessageBox.critical(self, "Ошибка", f"Не удалось удалить игру: {str(e)}")
-
-    def handle_result(self, result, error):
-        """Callback получает 2 параметра: результат и ошибка"""
-        if error:
-            # Была ошибка
-            print("Ошибка!")
-            print(f"Exception: {error['exception']}")
-            print(f"Traceback:\n{error['traceback']}")
-            # Можно показать сообщение пользователю
-            QMessageBox.critical(self, "Ошибка", str(error['exception']))
-        else:
-            # Успех
-            print(f"Результат: {result}")
+                    logger.error(f"Delete game error: {e}", exc_info=True)
+                    error_dialog = DynamicButtonDialog(
+                        title="Ошибка",
+                        message=f"Не удалось удалить игру: {str(e)}",
+                    )
+                    error_dialog.setFixedSize(250, 140)
+                    error_dialog.show()
 
     def on_sync(self):
         """Обработчик клика по кнопке синхронизации"""
@@ -566,6 +427,7 @@ class ClickableFrame(QFrame):
         self.sync_runner.finished.connect(self.game_update_signal.emit)
         self.sync_runner.error.connect(self.on_sync_error)
         self.sync_runner.progress.connect(self.on_sync_progress)
+        self.sync_runner.result.connect(self.on_sync_result)
 
         saves_path = self.kwargs.get("saves_path")
         game_path = self.kwargs.get("game_path")
@@ -647,7 +509,7 @@ class ClickableFrame(QFrame):
                                                saves_path=self.kwargs['saves_path'], game_id=game_id, api_client=self.api_client)
         else:
             if game_id:
-                print(f"Синхронизация игры с ID: {game_id}")
+                logger.info(f"Synchronizing the game with id: {game_id}")
 
                 self.sync_runner.run_async(sync_saves_action, game_name=self.kwargs['game_name'],
                                        saves_path=self.kwargs['saves_path'], game_id=game_id, api_client=self.api_client)
@@ -733,7 +595,8 @@ class FlowLayout(QLayout):
 
 class AddNewGameWindow(QDialog):
     """Модальное окно для добавления новой игры или редактирования существующей.
-    Содержит поля для ввода названия игры, путей к exe-файлу, сохранениям и изображению."""
+    Содержит поля для ввода названия игры, путей к exe-файлу, сохранениям и изображению.
+    Вмещает в себя объекты ClickableFrame."""
 
     game_update = Signal(str)
 
@@ -884,23 +747,46 @@ class AddNewGameWindow(QDialog):
             game_name = game_name_edit.text().strip()
             saves_path = saves_path_edit.text().strip()
             exe_path = exe_path_edit.text().strip()
-            image_path = image_path_edit.text().strip()  # Получаем путь к изображению
+            image_path = image_path_edit.text().strip()
 
-            # Проверка заполнения обязательных полей
             if not game_name:
-                # Можно показать сообщение об ошибке
+                no_name_message = DynamicButtonDialog(
+                    title="Невозможно добавить игру!",
+                    message="<b>Вы не заполнили имя игры!</b>",
+                    buttons=[('OK', 'secondary'), ]
+                )
+                no_name_message.setFixedSize(240, 110)
+                no_name_message.show()
                 return
-            if not saves_path:
-                # Можно показать сообщение об ошибке
+            if not saves_path or not os.path.exists(saves_path):
+                no_saves_path_message = DynamicButtonDialog(
+                    title="Невозможно добавить игру!",
+                    message="<b>Вы некорректно заполнили путь к сохранениям игры!</b>",
+                    buttons=[('OK', 'secondary'), ]
+                )
+                no_saves_path_message.setFixedSize(300, 110)
+                no_saves_path_message.show()
                 return
-            if not exe_path:
-                # Можно показать сообщение об ошибке
+            if not exe_path or not os.path.exists(exe_path) or not exe_path.endswith(".exe"):
+                no_saves_path_message = DynamicButtonDialog(
+                    title="Невозможно добавить игру!",
+                    message="<b>Вы некорректно заполнили путь к exe файлу игры!</b>"
+                            "<p>Нужно обязательно выбрать файл с расширением '.exe'!</p>",
+                    buttons=[('OK', 'secondary'), ]
+                )
+                no_saves_path_message.setFixedSize(310, 110)
+                no_saves_path_message.show()
                 return
 
-            # Здесь ваша логика сохранения данных игры
-            # Передаем также путь к изображению
             if self.edit is None:
-                add_new_game(game_name=game_name, saves_path=saves_path, game_path=exe_path, image_path=image_path)
+                add_status = add_new_game(game_name=game_name, saves_path=saves_path, game_path=exe_path, image_path=image_path)
+                if not add_status:
+                    add_error = DynamicButtonDialog(
+                        title="Ошибка добавления игры!",
+                        message=f"Игра с именем '{game_name}' уже существует!"
+                    )
+                    add_error.setFixedSize(240, 110)
+                    add_error.show()
             else:
                 update_game(game_name=game_name, saves_path=saves_path, game_path=exe_path,
                             image_path=image_path, game_id=self.kwargs["game_id"])
@@ -919,7 +805,6 @@ class AddNewGameWindow(QDialog):
         add_button.clicked.connect(accept_dialog)
         cancel_button.clicked.connect(cancel_dialog)
 
-        # Показываем диалог
         self.exec()
 
 class GamesDashboard(QWidget):
@@ -1008,17 +893,13 @@ class GamesDashboard(QWidget):
             )
             self.flow_layout.addWidget(card_widget)
 
-    def create_error_message(self, error_msg):
-        QMessageBox.critical(self, "Ошибка", error_msg)
-
-
     def create_game_card(self, game_id, game_name, image_path, game_path, saves_path, last_sync_date):
         """Создаёт карточку игры с фиксированным размером"""
         card = ClickableFrame(game_id=game_id, game_name=game_name, game_path=game_path, saves_path=saves_path,
                               image_path=image_path, last_sync_date=last_sync_date)
 
-        card.game_deleted_signal.connect(self.on_dashboard_changed)
-        card.game_update_signal.connect(self.on_dashboard_changed)
+        card.game_deleted_signal.connect(self.refresh_dashboard)
+        card.game_update_signal.connect(self.refresh_dashboard)
 
         card_style = """
             QFrame {
@@ -1090,12 +971,6 @@ class GamesDashboard(QWidget):
             y = parent_size.height() - button_size.height() - 20
             self.add_button.move(max(20, x), max(20, y))
 
-    def on_dashboard_changed(self, game_id):
-        """Обработчик сигнала удаления игры"""
-        print(f"Dashboard был обновлён! Изменения затронули игру с id {game_id}.")
-        # Обновляем dashboard
-        self.refresh_dashboard()
-
     def refresh_dashboard(self):
         """Обновляет dashboard после добавления новой игры"""
         async_runner = AsyncRunner()
@@ -1103,6 +978,7 @@ class GamesDashboard(QWidget):
         async_runner.error.connect(self.populate_game_cards)
         async_runner.run_async(load_games_covers, self.api_client)
         self.populate_game_cards()
+        logger.info(f"Dashboard was refreshed.")
 
     def resizeEvent(self, event):
         """Обработчик изменения размера виджета"""
@@ -1116,7 +992,6 @@ class GamesDashboard(QWidget):
 
     def add_new_game(self):
         """Открывает диалог добавления новой игры"""
-        print("Открытие диалога добавления игры")
         AddNewGameWindow()
         self.refresh_dashboard()
 
