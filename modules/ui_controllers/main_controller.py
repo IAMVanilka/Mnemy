@@ -25,7 +25,6 @@ def get_utc_time(date: datetime):
 
 async def sync_saves_action(game_name: str, saves_path: str, game_id: int, api_client: APIClient):
     last_sync_date = get_game_by_name(game_name)["last_sync_date"]
-
     if last_sync_date is not None:
         utc_date = get_utc_time(last_sync_date)
     else:

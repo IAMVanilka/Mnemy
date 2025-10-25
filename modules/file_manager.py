@@ -9,7 +9,6 @@ import logging
 import threading
 
 logger = logging.getLogger(__name__)
-logger.propagate = False
 
 async def hash_generator(base_dir) -> dict:
     """Сканирует папку и генерирует словарь {'file_path': 'md5_hash'}"""

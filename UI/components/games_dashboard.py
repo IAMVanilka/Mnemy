@@ -90,7 +90,7 @@ class ClickableFrame(QFrame):
             sync_msg.show()
             self.on_sync_error("Saves doesn't exist on server!")
         elif status == 200:
-            self.game_update_signal.emit()
+            self.game_update_signal.emit
         elif status is None:
             from pathlib import Path
             sync_msg = DynamicButtonDialog(
@@ -220,6 +220,12 @@ class ClickableFrame(QFrame):
             }
             QPushButton:pressed {
                 background-color: rgba(100, 100, 100, 1);
+            }
+             QToolTip {
+                background-color: #2a2a2a;
+                color: white;
+                border: 1px solid #555;
+                padding: 4px;
             }
         """)
         self.sync_button.setToolTip("Синхронизировать данные игры")
@@ -399,7 +405,8 @@ class ClickableFrame(QFrame):
                 try:
                     if user_choose == 0:
                         delete_game(game_id=game_id)
-                        os.remove(f"UI/resources/{game_name}.jpg")
+                        if os.path.exists(f"UI/resources/{game_name}.jpg"):
+                            os.remove(f"UI/resources/{game_name}.jpg")
                         self.game_deleted_signal.emit(game_id)
                         logger.info(f"Game {game_name} deleted.")
 

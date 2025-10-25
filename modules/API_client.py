@@ -140,8 +140,7 @@ class APIClient:
             response_data = response.json()
             missing = response_data['files_data']['missing_on_server']
             mismatched = response_data['files_data']['mismatched_hashes']
-            files_to_upload = [os.path.join(base_dir, f) for f in missing + mismatched]
-
+            files_to_upload = [os.path.join(base_dir, f.lstrip('/\\')) for f in missing + mismatched]
             logger.info(f"Found {len(files_to_upload)} files to upload for game '{game_name}'")
             return files_to_upload
 
